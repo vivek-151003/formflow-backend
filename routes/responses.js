@@ -65,7 +65,7 @@ router.get("/survey/:surveyId", async (req, res) => {
   }
 });
 
-// Get analytics for a survey
+// In routes/responses.js - Update the analytics endpoint
 router.get("/analytics/:surveyId", async (req, res) => {
   const { surveyId } = req.params;
 
@@ -79,19 +79,18 @@ router.get("/analytics/:surveyId", async (req, res) => {
     const analytics = [];
 
     for (const question of questions) {
-      // In routes/responses.js, update the rating analytics section:
       if (question.question_type === "rating") {
         const [ratings] = await db.query(
           `SELECT AVG(rating_value) as average, COUNT(*) as total 
-         FROM responses WHERE question_id = ? AND rating_value IS NOT NULL`,
+                     FROM responses WHERE question_id = ? AND rating_value IS NOT NULL`,
           [question.id],
         );
         analytics.push({
           question_id: question.id,
           question_text: question.question_text,
           type: "rating",
-          average: ratings[0].average ? parseFloat(ratings[0].average) : null, // Convert to number
-          total_responses: ratings[0].total,
+          average: ratings[0].average ? parseFloat(ratings[0].average) : null,
+          total_responses: ratings[0].total || 0,
         });
       } else if (question.question_type === "mcq") {
         const [mcqResults] = await db.query(
@@ -104,7 +103,7 @@ router.get("/analytics/:surveyId", async (req, res) => {
           question_id: question.id,
           question_text: question.question_text,
           type: "mcq",
-          results: mcqResults,
+          results: mcqResults || [], // Always return array, never undefined
         });
       } else {
         // Text responses
@@ -116,14 +115,19 @@ router.get("/analytics/:surveyId", async (req, res) => {
           question_id: question.id,
           question_text: question.question_text,
           type: "text",
-          responses: texts,
+          responses: texts || [], // Always return array
         });
       }
     }
 
+    // Always send JSON response
     res.json(analytics);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Analytics error:", error);
+    res.status(500).json({
+      error: "Failed to fetch analytics",
+      details: error.message,
+    });
   }
 });
 
