@@ -5,24 +5,9 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// CORS configuration for production
-const allowedOrigins = [
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'https://formflow-frontend.netlify.app',
-    'https://formflow-frontend.vercel.app',
-    process.env.FRONTEND_URL
-].filter(Boolean);
-
+// CORS configuration
 app.use(cors({
-    origin: function(origin, callback) {
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) === -1) {
-            console.log('Blocked origin:', origin);
-            return callback(null, true); // Allow anyway for demo
-        }
-        return callback(null, true);
-    },
+    origin: true, // Allow all origins for testing
     credentials: true
 }));
 
@@ -33,27 +18,73 @@ const surveyRoutes = require('./routes/surveys');
 const questionRoutes = require('./routes/questions');
 const responseRoutes = require('./routes/responses');
 
+// Debug middleware - log all requests
+app.use((req, res, next) => {
+    console.log(`📝 ${req.method} ${req.url}`);
+    next();
+});
+
+// Root API endpoint (fixes the 404)
+app.get('/api', (req, res) => {
+    res.json({
+        message: 'FormFlow API is running!',
+        version: '1.0.0',
+        endpoints: {
+            surveys: '/api/surveys',
+            questions: '/api/questions',
+            responses: '/api/responses',
+            analytics: '/api/responses/analytics/:surveyId',
+            test: '/api/test'
+        }
+    });
+});
+
+// Test endpoint
+app.get('/api/test', (req, res) => {
+    res.json({ 
+        message: 'Backend is working!',
+        database: 'Connected to TiDB Cloud',
+        timestamp: new Date().toISOString(),
+        endpoints: '/api/surveys, /api/questions, /api/responses'
+    });
+});
+
 // Use routes
 app.use('/api/surveys', surveyRoutes);
 app.use('/api/questions', questionRoutes);
 app.use('/api/responses', responseRoutes);
 
-// Test route
-app.get('/api/test', (req, res) => {
-    res.json({ 
-        message: 'Backend is working!',
-        database: 'Connected to TiDB Cloud',
-        timestamp: new Date().toISOString()
+// 404 handler for undefined routes
+app.use('*', (req, res) => {
+    res.status(404).json({
+        error: 'Endpoint not found',
+        requestedUrl: req.originalUrl,
+        availableEndpoints: [
+            'GET /api',
+            'GET /api/test',
+            'GET /api/surveys',
+            'POST /api/surveys',
+            'GET /api/surveys/:id',
+            'PATCH /api/surveys/:id',
+            'DELETE /api/surveys/:id',
+            'POST /api/questions',
+            'DELETE /api/questions/:id',
+            'POST /api/responses',
+            'GET /api/responses/survey/:surveyId',
+            'GET /api/responses/analytics/:surveyId',
+            'DELETE /api/responses/:responseId'
+        ]
     });
 });
 
-// Health check for Render
-app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'healthy' });
+// Error handler
+app.use((err, req, res, next) => {
+    console.error('Error:', err);
+    res.status(500).json({ error: 'Internal server error', message: err.message });
 });
 
 // Start server
 app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`📊 API URL: http://localhost:${PORT}/api/test`);
+    console.log(`📡 API available at http://localhost:${PORT}/api`);
 });
